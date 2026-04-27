@@ -1,0 +1,133 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}Chat - TeamSync{% endblock %}
+{% block body %}
+<div class="app-layout">
+    {% include 'partials/sidebar.html' with active_tab='chat' %}
+
+    <!-- Chat Sidebar -->
+    <div class="chat-sidebar" id="chat-sidebar">
+        <div class="sidebar-header">
+            <h2>Chat</h2>
+            <button class="btn-icon" onclick="document.getElementById('new-chat-modal').classList.add('show')" title="New chat" id="btn-new-chat">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            </button>
+        </div>
+        <div class="search-box">
+            <div class="search-wrapper">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+                <input type="text" class="search-input" placeholder="Search people or messages..." id="search-input">
+                <div class="search-results" id="search-results"></div>
+            </div>
+        </div>
+        <div class="conversation-list" id="conversation-list">
+            {% for conv in conversations %}
+            <a href="{% url 'chat:chat_room' conv.user.id %}" class="conv-item" id="conv-{{ conv.user.id }}">
+                <div class="avatar-wrapper">
+                    <img src="{{ conv.user.get_profile_image_url }}" class="avatar" alt="{{ conv.user.get_display_name }}">
+                    {% if conv.user.is_online %}<span class="online-dot"></span>{% endif %}
+                </div>
+                <div class="conv-info">
+                    <div class="conv-name">{{ conv.user.get_display_name }}</div>
+                    <div class="conv-preview">{% if conv.last_message %}{{ conv.last_message.message|truncatechars:40 }}{% else %}Start a conversation{% endif %}</div>
+                </div>
+                <div class="conv-meta">
+                    {% if conv.last_message %}<span class="conv-time">{{ conv.last_message.timestamp|timesince }} ago</span>{% endif %}
+                    {% if conv.unread_count > 0 %}<span class="unread-badge">{{ conv.unread_count }}</span>{% endif %}
+                </div>
+            </a>
+            {% empty %}
+            <div class="empty-state" style="padding:40px">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+                <h3>No conversations yet</h3>
+                <p>Start a new chat to begin</p>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Main Area - Empty State -->
+    <div class="main-content">
+        <div class="empty-state">
+            <svg viewBox="0 0 24 24" width="80" height="80" fill="none" stroke="currentColor" stroke-width="1"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+            <h3>Welcome to TeamSync</h3>
+            <p>Select a conversation or start a new chat</p>
+        </div>
+    </div>
+</div>
+
+<!-- New Chat Modal -->
+<div class="modal-overlay" id="new-chat-modal">
+    <div class="modal">
+        <div class="modal-header">
+            <h3>New Chat</h3>
+            <button class="btn-icon" onclick="this.closest('.modal-overlay').classList.remove('show')">✕</button>
+        </div>
+        <div class="modal-body">
+            <div class="form-group">
+                <label>Search Users</label>
+                <input type="text" class="form-input" placeholder="Type a name or email..." id="new-chat-search" autocomplete="off">
+            </div>
+            <div id="new-chat-results" style="max-height:200px;overflow-y:auto"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Search users for new chat
+let searchTimeout;
+document.getElementById('new-chat-search')?.addEventListener('input', function() {
+    clearTimeout(searchTimeout);
+    const q = this.value.trim();
+    if (q.length < 2) { document.getElementById('new-chat-results').innerHTML = ''; return; }
+    searchTimeout = setTimeout(() => {
+        fetch(`/accounts/search-users/?q=${encodeURIComponent(q)}`)
+            .then(r => r.json())
+            .then(d => {
+                const container = document.getElementById('new-chat-results');
+                container.innerHTML = d.users.map(u => `
+                    <a href="/chat/room/${u.id}/" class="conv-item" style="text-decoration:none">
+                        <div class="avatar-wrapper">
+                            <img src="${u.profile_image}" class="avatar" alt="${u.display_name}">
+                            ${u.is_online ? '<span class="online-dot"></span>' : ''}
+                        </div>
+                        <div class="conv-info">
+                            <div class="conv-name">${u.display_name}</div>
+                            <div class="conv-preview">${u.email}</div>
+                        </div>
+                    </a>
+                `).join('');
+            });
+    }, 300);
+});
+
+// Search messages
+document.getElementById('search-input')?.addEventListener('input', function() {
+    clearTimeout(searchTimeout);
+    const q = this.value.trim();
+    const results = document.getElementById('search-results');
+    if (q.length < 2) { results.classList.remove('show'); return; }
+    searchTimeout = setTimeout(() => {
+        fetch(`/chat/api/search/?q=${encodeURIComponent(q)}`)
+            .then(r => r.json())
+            .then(d => {
+                if (d.messages.length > 0) {
+                    results.innerHTML = d.messages.map(m => `
+                        <a href="/chat/room/${m.chat_user_id}/" class="search-result-item">
+                            <div><div style="font-size:13px;font-weight:500">${m.sender_name}</div>
+                            <div style="font-size:12px;color:var(--text-muted)">${m.message.substring(0,60)}</div></div>
+                        </a>
+                    `).join('');
+                    results.classList.add('show');
+                } else {
+                    results.innerHTML = '<div style="padding:12px;color:var(--text-muted);font-size:13px">No results found</div>';
+                    results.classList.add('show');
+                }
+            });
+    }, 300);
+});
+document.addEventListener('click', (e) => {
+    if (!e.target.closest('.search-wrapper')) document.getElementById('search-results')?.classList.remove('show');
+});
+</script>
+{% endblock %}

@@ -1,0 +1,51 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}Edit Profile - TeamSync{% endblock %}
+{% block body %}
+<div class="app-layout">
+    {% include 'partials/sidebar.html' with active_tab='profile' %}
+    <div class="main-content">
+        <div class="content-header">
+            <div class="content-header-left"><h3>Edit Profile</h3></div>
+        </div>
+        <div class="profile-container">
+            {% for message in messages %}
+            <div class="alert {% if message.tags == 'error' %}alert-error{% else %}alert-success{% endif %}">{{ message }}</div>
+            {% endfor %}
+            <form method="POST" enctype="multipart/form-data">
+                {% csrf_token %}
+                <div class="profile-section">
+                    <h3>Profile Picture</h3>
+                    <div style="display:flex;align-items:center;gap:16px;margin-bottom:16px">
+                        <img src="{{ request.user.get_profile_image_url }}" class="avatar avatar-xl" alt="Current" id="preview-avatar">
+                        {{ form.profile_image }}
+                    </div>
+                </div>
+                <div class="profile-section">
+                    <h3>Personal Info</h3>
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+                        <div class="form-group"><label>First Name</label>{{ form.first_name }}</div>
+                        <div class="form-group"><label>Last Name</label>{{ form.last_name }}</div>
+                    </div>
+                    <div class="form-group"><label>Username</label>{{ form.username }}</div>
+                    <div class="form-group"><label>Bio</label>{{ form.bio }}</div>
+                </div>
+                <div style="display:flex;gap:12px;justify-content:flex-end">
+                    <a href="{% url 'accounts:profile' %}" class="btn btn-secondary">Cancel</a>
+                    <button type="submit" class="btn btn-primary" style="width:auto">Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+<script>
+document.getElementById('edit-avatar')?.addEventListener('change', function(e) {
+    const file = e.target.files[0];
+    if (file) {
+        const reader = new FileReader();
+        reader.onload = (ev) => document.getElementById('preview-avatar').src = ev.target.result;
+        reader.readAsDataURL(file);
+    }
+});
+</script>
+{% endblock %}

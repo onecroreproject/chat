@@ -1,0 +1,40 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}Profile - TeamSync{% endblock %}
+{% block body %}
+<div class="app-layout">
+    {% include 'partials/sidebar.html' with active_tab='profile' %}
+    <div class="main-content">
+        <div class="content-header">
+            <div class="content-header-left"><h3>Profile</h3></div>
+            <div class="content-header-right">
+                <a href="{% url 'accounts:edit_profile' %}" class="btn btn-secondary btn-sm">Edit Profile</a>
+            </div>
+        </div>
+        <div class="profile-container">
+            <div class="profile-header">
+                <img src="{{ profile_user.get_profile_image_url }}" class="avatar avatar-xl" alt="{{ profile_user.get_display_name }}">
+                <div class="profile-details">
+                    <h2>{{ profile_user.get_display_name }}</h2>
+                    <p>@{{ profile_user.username }}</p>
+                    <p>{{ profile_user.email }}</p>
+                    {% if profile_user.bio %}<p style="margin-top:8px;color:var(--text-secondary)">{{ profile_user.bio }}</p>{% endif %}
+                </div>
+            </div>
+            <div class="profile-section">
+                <h3>Account Info</h3>
+                <p><strong>Username:</strong> {{ profile_user.username }}</p>
+                <p style="margin-top:8px"><strong>Email:</strong> {{ profile_user.email }}</p>
+                <p style="margin-top:8px"><strong>Status:</strong>
+                    {% if profile_user.is_online %}<span style="color:var(--success)">● Online</span>
+                    {% else %}<span style="color:var(--text-muted)">● Offline</span>{% endif %}
+                </p>
+                <p style="margin-top:8px"><strong>Verified:</strong>
+                    {% if profile_user.is_verified %}<span style="color:var(--success)">✓ Yes</span>
+                    {% else %}<span style="color:var(--warning)">✗ No</span>{% endif %}
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

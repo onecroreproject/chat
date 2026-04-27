@@ -1,0 +1,16 @@
+{% extends 'base.html' %}
+{% block title %}Logout - TeamSync{% endblock %}
+{% block body %}
+<div class="auth-container">
+    <div class="auth-card" style="text-align:center">
+        <div class="auth-logo"><h1>🔷 TeamSync</h1></div>
+        <h3 style="margin-bottom:8px">Sign out?</h3>
+        <p style="color:var(--text-secondary);font-size:14px;margin-bottom:24px">Are you sure you want to sign out of TeamSync?</p>
+        <form method="POST" style="display:flex;gap:12px;justify-content:center">
+            {% csrf_token %}
+            <a href="{% url 'chat:home' %}" class="btn btn-secondary">Cancel</a>
+            <button type="submit" class="btn btn-danger">Sign Out</button>
+        </form>
+    </div>
+</div>
+{% endblock %}

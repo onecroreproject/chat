@@ -1,0 +1,41 @@
+{% extends 'base.html' %}
+{% block title %}Verify Email - TeamSync{% endblock %}
+{% block body %}
+<div class="auth-container">
+    <div class="auth-card">
+        <div class="auth-logo">
+            <h1>🔷 TeamSync</h1>
+            <p>Verify your email</p>
+        </div>
+        {% for message in messages %}
+        <div class="alert {% if message.tags == 'error' %}alert-error{% elif message.tags == 'success' %}alert-success{% else %}alert-warning{% endif %}">{{ message }}</div>
+        {% endfor %}
+        <p style="text-align:center;color:var(--text-secondary);font-size:13px;margin-bottom:20px">
+            We sent a 6-digit code to <strong>{{ email }}</strong>
+        </p>
+        <form method="POST">
+            {% csrf_token %}
+            <div class="form-group">
+                <label for="otp-code">Verification Code</label>
+                {{ form.otp_code }}
+            </div>
+            <button type="submit" class="btn btn-primary">Verify Email</button>
+        </form>
+        <div class="auth-footer">
+            <p><a href="#" onclick="resendOTP()" id="resend-link">Resend code</a></p>
+        </div>
+    </div>
+</div>
+<script>
+function resendOTP() {
+    fetch("{% url 'accounts:resend_otp' %}")
+        .then(r => r.json())
+        .then(d => {
+            if(d.success) {
+                document.getElementById('resend-link').textContent = 'Code resent!';
+                setTimeout(() => document.getElementById('resend-link').textContent = 'Resend code', 3000);
+            }
+        });
+}
+</script>
+{% endblock %}

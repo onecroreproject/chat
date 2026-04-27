@@ -1,0 +1,139 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}{{ team.name }} - TeamSync{% endblock %}
+{% block body %}
+<div class="app-layout">
+    {% include 'partials/sidebar.html' with active_tab='teams' %}
+
+    <!-- Team Channels Sidebar -->
+    <div class="chat-sidebar">
+        <div class="sidebar-header">
+            <h2 style="font-size:16px">{{ team.name }}</h2>
+            <a href="{% url 'teams:teams_home' %}" class="btn-icon" title="Back">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5m7-7l-7 7 7 7"/></svg>
+            </a>
+        </div>
+        <div class="channel-list">
+            <div style="padding:8px 16px;display:flex;align-items:center;justify-content:space-between">
+                <span style="font-size:12px;color:var(--text-muted);text-transform:uppercase;font-weight:600">Channels</span>
+                {% if is_admin %}
+                <button class="btn-icon btn-sm" onclick="document.getElementById('create-channel-modal').classList.add('show')" title="Add channel" id="btn-add-channel">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                </button>
+                {% endif %}
+            </div>
+            {% for ch in channels %}
+            <a href="{% url 'teams:channel' team.id ch.id %}" class="channel-item" id="channel-{{ ch.id }}">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 9h16M4 15h16M10 3l-2 18M16 3l-2 18"/></svg>
+                {{ ch.name }}
+            </a>
+            {% endfor %}
+        </div>
+        <div style="border-top:1px solid var(--border);padding:8px 16px">
+            <div style="font-size:12px;color:var(--text-muted);text-transform:uppercase;font-weight:600;margin-bottom:8px">Members ({{ members|length }})</div>
+            {% for m in members %}
+            <div class="member-item">
+                <div class="avatar-wrapper">
+                    <img src="{{ m.user.get_profile_image_url }}" class="avatar avatar-sm" alt="">
+                    {% if m.user.is_online %}<span class="online-dot" style="width:8px;height:8px"></span>{% endif %}
+                </div>
+                <div class="member-info">
+                    <div class="member-name">{{ m.user.get_display_name }}</div>
+                    <div class="member-role">{{ m.role }}</div>
+                </div>
+            </div>
+            {% endfor %}
+            {% if is_admin %}
+            <button class="btn btn-secondary btn-sm" style="width:100%;margin-top:8px" onclick="document.getElementById('add-member-modal').classList.add('show')" id="btn-add-member">+ Add Member</button>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="main-content">
+        <div class="empty-state">
+            <h3>{{ team.name }}</h3>
+            <p>Select a channel to start chatting</p>
+        </div>
+    </div>
+</div>
+
+<!-- Create Channel Modal -->
+<div class="modal-overlay" id="create-channel-modal">
+    <div class="modal">
+        <div class="modal-header">
+            <h3>Create Channel</h3>
+            <button class="btn-icon" onclick="this.closest('.modal-overlay').classList.remove('show')">✕</button>
+        </div>
+        <div class="modal-body">
+            <div class="form-group">
+                <label>Channel Name</label>
+                <input type="text" class="form-input" id="channel-name" placeholder="e.g., announcements">
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary btn-sm" onclick="this.closest('.modal-overlay').classList.remove('show')">Cancel</button>
+            <button class="btn btn-primary btn-sm" style="width:auto" onclick="createChannel()" id="btn-create-channel-submit">Create</button>
+        </div>
+    </div>
+</div>
+
+<!-- Add Member Modal -->
+<div class="modal-overlay" id="add-member-modal">
+    <div class="modal">
+        <div class="modal-header">
+            <h3>Add Member</h3>
+            <button class="btn-icon" onclick="this.closest('.modal-overlay').classList.remove('show')">✕</button>
+        </div>
+        <div class="modal-body">
+            <input type="text" class="form-input" placeholder="Search users..." id="add-member-search" autocomplete="off">
+            <div id="add-member-results" style="max-height:200px;overflow-y:auto;margin-top:8px"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+const csrfToken = '{{ csrf_token }}';
+const teamId = {{ team.id }};
+
+function createChannel() {
+    const name = document.getElementById('channel-name').value.trim();
+    if (!name) return;
+    fetch(`/teams/${teamId}/create-channel/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+        body: JSON.stringify({ name })
+    }).then(r => r.json()).then(d => {
+        if (d.success) location.reload();
+        else alert(d.error);
+    });
+}
+
+let searchTimeout;
+document.getElementById('add-member-search')?.addEventListener('input', function() {
+    clearTimeout(searchTimeout);
+    const q = this.value.trim();
+    if (q.length < 2) { document.getElementById('add-member-results').innerHTML = ''; return; }
+    searchTimeout = setTimeout(() => {
+        fetch(`/accounts/search-users/?q=${encodeURIComponent(q)}`).then(r => r.json()).then(d => {
+            document.getElementById('add-member-results').innerHTML = d.users.map(u => `
+                <div class="conv-item" onclick="addMember(${u.id})" style="cursor:pointer">
+                    <img src="${u.profile_image}" class="avatar" alt=""><div class="conv-info">
+                    <div class="conv-name">${u.display_name}</div><div class="conv-preview">${u.email}</div></div>
+                </div>
+            `).join('');
+        });
+    }, 300);
+});
+
+function addMember(userId) {
+    fetch(`/teams/${teamId}/add-member/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+        body: JSON.stringify({ user_id: userId })
+    }).then(r => r.json()).then(d => {
+        if (d.success) location.reload();
+        else alert(d.error);
+    });
+}
+</script>
+{% endblock %}

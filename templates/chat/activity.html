@@ -1,0 +1,67 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}Activity - TeamSync{% endblock %}
+{% block body %}
+<div class="app-layout">
+    {% include 'partials/sidebar.html' with active_tab='activity' %}
+    
+    <div class="chat-sidebar">
+        <div class="sidebar-header">
+            <h2>Activity</h2>
+        </div>
+        <div class="conversation-list">
+            <div class="conv-item active">
+                <div class="conv-info">
+                    <div class="conv-name">Feed</div>
+                    <div class="conv-preview">Recent updates across teams</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="main-content">
+        <div class="content-header">
+            <div class="content-header-left"><h3>Recent Activity</h3></div>
+        </div>
+        
+        <div class="activity-feed" style="padding: 24px; overflow-y: auto; flex: 1;">
+            <div class="activity-section">
+                <h4 style="font-size: 14px; color: var(--text-muted); margin-bottom: 16px; text-transform: uppercase; letter-spacing: 0.5px;">Notifications</h4>
+                {% for notif in notifications %}
+                <div class="notif-item {% if not notif.is_read %}unread{% endif %}" style="background: var(--bg-surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; margin-bottom: 12px; transition: var(--transition); cursor: pointer;">
+                    <div style="display: flex; gap: 16px; align-items: flex-start;">
+                        <div style="width: 40px; height: 40px; border-radius: 50%; background: var(--accent-light); display: flex; align-items: center; justify-content: center; color: var(--accent);">
+                            {% if notif.notif_type == 'message' %}💬{% elif notif.notif_type == 'team_invite' %}👥{% else %}🔔{% endif %}
+                        </div>
+                        <div style="flex: 1;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                                <span style="font-weight: 600; font-size: 14px;">{{ notif.title }}</span>
+                                <span style="font-size: 11px; color: var(--text-muted);">{{ notif.created_at|timesince }} ago</span>
+                            </div>
+                            <div style="font-size: 13px; color: var(--text-secondary);">{{ notif.body }}</div>
+                        </div>
+                    </div>
+                </div>
+                {% empty %}
+                <div class="empty-state" style="padding: 40px; background: var(--bg-surface); border: 1px solid var(--border); border-radius: var(--radius);">
+                    <p>No new notifications</p>
+                </div>
+                {% endfor %}
+            </div>
+
+            <div class="activity-section" style="margin-top: 32px;">
+                <h4 style="font-size: 14px; color: var(--text-muted); margin-bottom: 16px; text-transform: uppercase; letter-spacing: 0.5px;">System Activity</h4>
+                {% for act in activities %}
+                <div class="activity-item" style="display: flex; gap: 16px; align-items: flex-start; padding: 12px 0; border-bottom: 1px solid var(--border);">
+                    <div style="width: 10px; height: 10px; border-radius: 50%; background: var(--accent); margin-top: 6px;"></div>
+                    <div>
+                        <div style="font-size: 14px; font-weight: 500;">{{ act.title }}</div>
+                        <div style="font-size: 12px; color: var(--text-muted);">{{ act.body }} • {{ act.time|date:"h:i A" }}</div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

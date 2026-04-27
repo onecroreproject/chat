@@ -1,0 +1,57 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}Files - TeamSync{% endblock %}
+{% block body %}
+<div class="app-layout">
+    {% include 'partials/sidebar.html' with active_tab='files' %}
+    <div class="main-content">
+        <div class="content-header">
+            <div class="content-header-left"><h3>Files</h3></div>
+            <div class="content-header-right">
+                <button class="btn btn-primary btn-sm" style="width:auto" onclick="document.getElementById('upload-input').click()" id="btn-upload">+ Upload File</button>
+                <input type="file" id="upload-input" style="display:none" onchange="uploadFileFromPage(this)" multiple>
+            </div>
+        </div>
+        <div class="files-grid" id="files-grid">
+            {% for file in files %}
+            <div class="file-card" id="file-{{ file.id }}">
+                <div class="file-card-icon">
+                    {% if file.is_image %}🖼️{% elif file.is_pdf %}📄{% else %}📁{% endif %}
+                </div>
+                <div class="file-card-name">{{ file.original_name }}</div>
+                <div class="file-card-meta">{{ file.get_size_display }} · {{ file.uploaded_at|date:"M d, Y" }}</div>
+                {% if file.is_image %}
+                <img src="{{ file.get_file_url }}" style="width:100%;max-height:120px;object-fit:cover;border-radius:4px;margin-top:8px" alt="">
+                {% endif %}
+                <div class="file-card-actions">
+                    <a href="{{ file.get_file_url }}" class="btn btn-secondary btn-sm" download>Download</a>
+                    <button class="btn btn-danger btn-sm" onclick="deleteFile({{ file.id }})">Delete</button>
+                </div>
+            </div>
+            {% empty %}
+            <div class="empty-state" style="grid-column:1/-1">
+                <svg viewBox="0 0 24 24" width="64" height="64" fill="none" stroke="currentColor" stroke-width="1"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                <h3>No files uploaded</h3>
+                <p>Upload files to share with your team</p>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+<script>
+const csrfToken = '{{ csrf_token }}';
+function uploadFileFromPage(input) {
+    Array.from(input.files).forEach(file => {
+        const fd = new FormData(); fd.append('file', file);
+        fetch('/files/upload/', { method: 'POST', headers: { 'X-CSRFToken': csrfToken }, body: fd })
+            .then(r => r.json()).then(d => { if (d.success) location.reload(); else alert(d.error); });
+    });
+    input.value = '';
+}
+function deleteFile(id) {
+    if (!confirm('Delete this file?')) return;
+    fetch(`/files/delete/${id}/`, { method: 'POST', headers: { 'X-CSRFToken': csrfToken } })
+        .then(r => r.json()).then(d => { if (d.success) document.getElementById(`file-${id}`).remove(); });
+}
+</script>
+{% endblock %}

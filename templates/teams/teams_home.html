@@ -1,0 +1,77 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}Teams - TeamSync{% endblock %}
+{% block body %}
+<div class="app-layout">
+    {% include 'partials/sidebar.html' with active_tab='teams' %}
+
+    <!-- Groups Sidebar -->
+    <div class="chat-sidebar">
+        <div class="sidebar-header">
+            <h2>Groups</h2>
+            <button class="btn-icon" onclick="document.getElementById('create-team-modal').classList.add('show')" title="Create Group" id="btn-add-group">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            </button>
+        </div>
+        <div class="search-box">
+            <div class="search-wrapper">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+                <input type="text" class="search-input" placeholder="Search groups..." id="search-groups">
+            </div>
+        </div>
+        <div class="conversation-list">
+            {% for team in teams %}
+            <a href="{% url 'teams:team_detail' team.id %}" class="conv-item" id="team-{{ team.id }}">
+                <div class="avatar-wrapper">
+                    <div class="avatar" style="background:var(--accent); display:flex; align-items:center; justify-content:center; color:white; font-weight:bold;">
+                        {{ team.name|first|upper }}
+                    </div>
+                </div>
+                <div class="conv-info">
+                    <div class="conv-name">{{ team.name }}</div>
+                    <div class="conv-preview">{{ team.get_member_count }} members</div>
+                </div>
+            </a>
+            {% empty %}
+            <div class="empty-state" style="padding:20px">
+                <p>No groups joined</p>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Main Content Area -->
+    <div class="main-content">
+        <div class="empty-state">
+            <svg viewBox="0 0 24 24" width="80" height="80" fill="none" stroke="currentColor" stroke-width="1"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4-4v2"/><circle cx="9" cy="7" r="4"/></svg>
+            <h3>Select a group to collaborate</h3>
+            <p>Choose from the list on the left or create a new group</p>
+            <button class="btn btn-primary" style="margin-top:20px; width:auto" onclick="document.getElementById('create-team-modal').classList.add('show')">Create New Group</button>
+        </div>
+    </div>
+</div>
+
+<!-- Create Team Modal -->
+<div class="modal-overlay" id="create-team-modal">
+    <div class="modal">
+        <div class="modal-header">
+            <h3>Create Team</h3>
+            <button class="btn-icon" onclick="this.closest('.modal-overlay').classList.remove('show')">✕</button>
+        </div>
+        <div class="modal-body">
+            <form method="POST" action="{% url 'teams:create_team' %}" id="create-team-form">
+                {% csrf_token %}
+                <div class="form-group">
+                    <label>Team Name</label>
+                    <input type="text" name="name" class="form-input" placeholder="e.g., Marketing Team" required id="team-name-input">
+                </div>
+                <div class="form-group">
+                    <label>Description</label>
+                    <input type="text" name="description" class="form-input" placeholder="What's this team about?" id="team-desc-input">
+                </div>
+                <button type="submit" class="btn btn-primary">Create Team</button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,426 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}Chat with {{ other_user.get_display_name }} - TeamSync{% endblock %}
+{% block body %}
+<div class="app-layout">
+    {% include 'partials/sidebar.html' with active_tab='chat' %}
+
+    <!-- Chat Sidebar -->
+    <div class="chat-sidebar">
+        <div class="sidebar-header">
+            <h2>Chat</h2>
+            <button class="btn-icon" onclick="document.getElementById('new-chat-modal').classList.add('show')" id="btn-new-chat-room">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            </button>
+        </div>
+        <div class="search-box">
+            <div class="search-wrapper">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+                <input type="text" class="search-input" placeholder="Search..." id="search-input">
+            </div>
+        </div>
+        <div class="conversation-list">
+            {% for conv in conversations %}
+            <a href="{% url 'chat:chat_room' conv.user.id %}" class="conv-item {% if conv.user.id == other_user.id %}active{% endif %}">
+                <div class="avatar-wrapper">
+                    <img src="{{ conv.user.get_profile_image_url }}" class="avatar" alt="">
+                    {% if conv.user.is_online %}<span class="online-dot"></span>{% endif %}
+                </div>
+                <div class="conv-info">
+                    <div class="conv-name">{{ conv.user.get_display_name }}</div>
+                    <div class="conv-preview">{% if conv.last_message %}{{ conv.last_message.message|truncatechars:35 }}{% endif %}</div>
+                </div>
+                {% if conv.unread_count > 0 %}<span class="unread-badge">{{ conv.unread_count }}</span>{% endif %}
+            </a>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Chat Main Area -->
+    <div class="main-content">
+        <div class="content-header">
+            <div class="content-header-left">
+                <img src="{{ other_user.get_profile_image_url }}" class="avatar avatar-sm" alt="">
+                <div>
+                    <h3>{{ other_user.get_display_name }}</h3>
+                    <span style="font-size:11px;color:{% if other_user.is_online %}var(--success){% else %}var(--text-muted){% endif %}">
+                        {% if other_user.is_online %}Online{% else %}Offline{% endif %}
+                    </span>
+                </div>
+            </div>
+        </div>
+
+        <div class="chat-area" id="chat-area">
+            {% for msg in messages %}
+            <div class="msg-group {% if msg.sender == request.user %}sent{% endif %} {% if msg.is_deleted %}deleted{% endif %}" id="msg-{{ msg.id }}">
+                {% if msg.sender != request.user %}
+                <img src="{{ msg.sender.get_profile_image_url }}" class="avatar avatar-sm" alt="">
+                {% endif %}
+                <div class="msg-content-wrapper">
+                    <div class="msg-bubble">
+                        {% if msg.sender != request.user %}<div class="msg-sender">{{ msg.sender.get_display_name }}</div>{% endif %}
+                        <div class="msg-text">{% if msg.is_deleted %}<i>This message was deleted</i>{% else %}{{ msg.message }}{% endif %}</div>
+                        {% if not msg.is_deleted and msg.file %}
+                            {% if msg.is_image %}
+                                <img src="{{ msg.file.url }}" class="msg-image" alt="Image" onclick="window.open(this.src)">
+                            {% elif msg.is_video %}
+                                <video src="{{ msg.file.url }}" class="msg-video" controls></video>
+                            {% else %}
+                                <a href="{{ msg.file.url }}" class="msg-file" download>
+                                    <span class="msg-file-icon">📎</span>
+                                    <span class="msg-file-name">{{ msg.get_file_name }}</span>
+                                </a>
+                            {% endif %}
+                        {% endif %}
+                        {% if not msg.is_deleted %}
+                        <div class="msg-actions">
+                            <button onclick="forwardMessage({{ msg.id }}, '{{ msg.message|escapejs }}')" title="Forward">↪️</button>
+                            {% if msg.sender == request.user %}
+                            <button onclick="editMessage({{ msg.id }}, '{{ msg.message|escapejs }}')" title="Edit">✏️</button>
+                            <button onclick="deleteMessage({{ msg.id }})" title="Delete">🗑️</button>
+                            {% endif %}
+                        </div>
+                        {% endif %}
+                    </div>
+                    <div class="msg-meta">
+                        <span>{{ msg.timestamp|date:"h:i A" }}</span>
+                        {% if msg.edited_at %}<span class="edited-label">(edited)</span>{% endif %}
+                        {% if msg.sender == request.user %}
+                            <span class="msg-status">{% if msg.seen %}✓✓{% else %}✓{% endif %}</span>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+        <div class="typing-indicator" id="typing-indicator"></div>
+
+        <!-- Message Input -->
+        <div class="chat-input-area">
+            <div class="chat-input-wrapper">
+                <div id="edit-indicator" style="display:none; padding: 4px 12px; background: var(--bg-surface); border-bottom: 1px solid var(--border); width: 100%; border-radius: 8px 8px 0 0; position: absolute; top: -32px; left: 0; font-size: 12px; display: flex; justify-content: space-between;">
+                    <span>Editing message...</span>
+                    <button onclick="cancelEdit()" style="background:none; border:none; color:var(--accent); cursor:pointer;">Cancel</button>
+                </div>
+                <div class="input-actions">
+                    <button type="button" onclick="document.getElementById('file-input').click()" title="Attach file" id="btn-attach">📎</button>
+                    <input type="file" id="file-input" style="display:none" onchange="uploadFile(this)">
+                </div>
+                <textarea class="chat-input" id="message-input" placeholder="Type a message..." rows="1"></textarea>
+                <div class="input-actions">
+                    <div class="emoji-picker-container">
+                        <button type="button" onclick="toggleEmoji()" title="Emoji" id="btn-emoji">😊</button>
+                        <div class="emoji-panel" id="emoji-panel">
+                            <div class="emoji-grid" id="emoji-grid"></div>
+                        </div>
+                    </div>
+                    <button type="button" class="send-btn" onclick="sendMessage()" title="Send" id="btn-send">
+                        <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- New Chat Modal -->
+<div class="modal-overlay" id="new-chat-modal">
+    <div class="modal">
+        <div class="modal-header">
+            <h3>New Chat</h3>
+            <button class="btn-icon" onclick="this.closest('.modal-overlay').classList.remove('show')">✕</button>
+        </div>
+        <div class="modal-body">
+            <input type="text" class="form-input" placeholder="Search users..." id="new-chat-search" autocomplete="off">
+            <div id="new-chat-results" style="max-height:200px;overflow-y:auto;margin-top:8px"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+const currentUserId = {{ request.user.id }};
+const otherUserId = {{ other_user.id }};
+const roomName = [Math.min(currentUserId, otherUserId), Math.max(currentUserId, otherUserId)].join('_');
+const csrfToken = '{{ csrf_token }}';
+
+let editingMessageId = null;
+
+// Emojis
+const emojis = ['😀','😂','😍','🥰','😎','🤔','👍','❤️','🔥','💯','🎉','👋','😊','🙏','💪','✨','🚀','😢','😡','🤩','😴','🤗','👏','💡','⭐','🎯','✅','❌','💬','📎'];
+
+// Populate emoji grid
+const emojiGrid = document.getElementById('emoji-grid');
+emojis.forEach(e => {
+    const btn = document.createElement('button');
+    btn.className = 'emoji-btn';
+    btn.textContent = e;
+    btn.onclick = () => {
+        document.getElementById('message-input').value += e;
+        document.getElementById('emoji-panel').classList.remove('show');
+        document.getElementById('message-input').focus();
+    };
+    emojiGrid.appendChild(btn);
+});
+
+function toggleEmoji() {
+    document.getElementById('emoji-panel').classList.toggle('show');
+}
+
+// Scroll to bottom
+function scrollToBottom() {
+    const area = document.getElementById('chat-area');
+    area.scrollTop = area.scrollHeight;
+}
+scrollToBottom();
+
+// WebSocket connection
+let chatSocket = null;
+function connectWebSocket() {
+    const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    chatSocket = new WebSocket(`${wsProtocol}//${location.host}/ws/chat/${roomName}/`);
+
+    chatSocket.onmessage = function(e) {
+        const data = JSON.parse(e.data);
+        if (data.type === 'chat_message') {
+            appendOrUpdateMessage(data);
+            if (data.sender_id !== currentUserId) {
+                chatSocket.send(JSON.stringify({ type: 'mark_seen', message_id: data.message_id }));
+            }
+        } else if (data.type === 'typing') {
+            const indicator = document.getElementById('typing-indicator');
+            if (data.is_typing) {
+                indicator.textContent = `${data.sender_name} is typing...`;
+                indicator.style.display = 'block';
+            } else {
+                indicator.style.display = 'none';
+            }
+        } else if (data.type === 'message_seen') {
+            const msgEl = document.querySelector(`#msg-${data.message_id} .msg-status`);
+            if (msgEl) msgEl.textContent = '✓✓';
+        }
+    };
+
+    chatSocket.onclose = function() {
+        setTimeout(connectWebSocket, 3000);
+    };
+}
+connectWebSocket();
+
+function appendOrUpdateMessage(data) {
+    const existing = document.getElementById(`msg-${data.message_id}`);
+    if (existing) {
+        // Update logic for edit/delete
+        if (data.is_deleted) {
+            existing.classList.add('deleted');
+            existing.querySelector('.msg-text').innerHTML = '<i>This message was deleted</i>';
+            existing.querySelector('.msg-actions')?.remove();
+            existing.querySelectorAll('.msg-image, .msg-video, .msg-file').forEach(el => el.remove());
+        } else if (data.message) {
+            existing.querySelector('.msg-text').textContent = data.message;
+            if (!existing.querySelector('.edited-label')) {
+                existing.querySelector('.msg-meta').insertAdjacentHTML('afterbegin', '<span class="edited-label">(edited)</span>');
+            }
+        }
+        return;
+    }
+
+    const isSent = data.sender_id === currentUserId;
+    const area = document.getElementById('chat-area');
+    const ts = new Date(data.timestamp);
+    const timeStr = ts.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+    let fileHtml = '';
+    if (data.file_url) {
+        const isImg = /\.(jpg|jpeg|png|gif|webp|bmp)$/i.test(data.file_url);
+        const isVid = /\.(mp4|webm|ogg|mov|avi)$/i.test(data.file_url);
+        if (isImg) {
+            fileHtml = `<img src="${data.file_url}" class="msg-image" alt="Image" onclick="window.open(this.src)">`;
+        } else if (isVid) {
+            fileHtml = `<video src="${data.file_url}" class="msg-video" controls></video>`;
+        } else {
+            fileHtml = `<a href="${data.file_url}" class="msg-file" download><span class="msg-file-icon">📎</span><span class="msg-file-name">${data.file_name || 'File'}</span></a>`;
+        }
+    }
+
+    const html = `
+        <div class="msg-group ${isSent ? 'sent' : ''}" id="msg-${data.message_id}">
+            ${!isSent ? `<img src="${data.sender_avatar}" class="avatar avatar-sm" alt="">` : ''}
+            <div class="msg-content-wrapper">
+                <div class="msg-bubble">
+                    ${!isSent ? `<div class="msg-sender">${data.sender_name}</div>` : ''}
+                    <div class="msg-text">${escapeHtml(data.message)}</div>
+                    ${fileHtml}
+                    <div class="msg-actions">
+                        <button onclick="forwardMessage(${data.message_id}, '${(data.message || '').replace(/'/g, "\\'")}')" title="Forward">↪️</button>
+                        ${isSent ? `
+                            <button onclick="editMessage(${data.message_id}, '${(data.message || '').replace(/'/g, "\\'")}')" title="Edit">✏️</button>
+                            <button onclick="deleteMessage(${data.message_id})" title="Delete">🗑️</button>
+                        ` : ''}
+                    </div>
+                </div>
+                <div class="msg-meta">
+                    <span>${timeStr}</span>
+                    ${isSent ? `<span class="msg-status">${data.seen ? '✓✓' : '✓'}</span>` : ''}
+                </div>
+            </div>
+        </div>`;
+    area.insertAdjacentHTML('beforeend', html);
+    scrollToBottom();
+}
+
+function escapeHtml(text) {
+    const d = document.createElement('div');
+    d.textContent = text;
+    return d.innerHTML;
+}
+
+function sendMessage() {
+    const input = document.getElementById('message-input');
+    const msg = input.value.trim();
+    if (!msg || !chatSocket || chatSocket.readyState !== WebSocket.OPEN) return;
+
+    if (editingMessageId) {
+        // Handle Edit
+        fetch(`/chat/api/messages/${editingMessageId}/edit/`, {
+            method: 'POST',
+            headers: { 'X-CSRFToken': csrfToken, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message: msg })
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                cancelEdit();
+                // WebSocket will likely broadcast this in a real system, 
+                // but here we can just update the UI or wait for socket.
+            }
+        });
+    } else {
+        chatSocket.send(JSON.stringify({
+            type: 'chat_message',
+            message: msg,
+            receiver_id: otherUserId
+        }));
+    }
+    input.value = '';
+    input.style.height = 'auto';
+}
+
+function editMessage(id, text) {
+    editingMessageId = id;
+    const input = document.getElementById('message-input');
+    input.value = text;
+    input.focus();
+    document.getElementById('edit-indicator').style.display = 'flex';
+}
+
+function cancelEdit() {
+    editingMessageId = null;
+    document.getElementById('message-input').value = '';
+    document.getElementById('edit-indicator').style.display = 'none';
+}
+
+function deleteMessage(id) {
+    if (!confirm('Are you sure you want to delete this message?')) return;
+    fetch(`/chat/api/messages/${id}/delete/`, {
+        method: 'POST',
+        headers: { 'X-CSRFToken': csrfToken }
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            document.getElementById(`msg-${id}`).classList.add('deleted');
+            document.getElementById(`msg-${id}`).querySelector('.msg-text').innerHTML = '<i>This message was deleted</i>';
+            document.getElementById(`msg-${id}`).querySelector('.msg-actions')?.remove();
+        }
+    });
+}
+
+function forwardMessage(id, text) {
+    const recipientId = prompt('Enter User ID to forward to (This would be a picker in a full UI):');
+    if (!recipientId) return;
+    
+    chatSocket.send(JSON.stringify({
+        type: 'chat_message',
+        message: `[Forwarded]: ${text}`,
+        receiver_id: parseInt(recipientId)
+    }));
+    alert('Message forwarded!');
+}
+
+// Enter to send, Shift+Enter for new line
+document.getElementById('message-input').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
+    }
+});
+
+// Auto-resize textarea
+document.getElementById('message-input').addEventListener('input', function() {
+    this.style.height = 'auto';
+    this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+});
+
+// Typing indicator
+let typingTimeout;
+document.getElementById('message-input').addEventListener('input', function() {
+    if (chatSocket && chatSocket.readyState === WebSocket.OPEN) {
+        chatSocket.send(JSON.stringify({ type: 'typing', is_typing: true }));
+        clearTimeout(typingTimeout);
+        typingTimeout = setTimeout(() => {
+            chatSocket.send(JSON.stringify({ type: 'typing', is_typing: false }));
+        }, 2000);
+    }
+});
+
+// File upload
+function uploadFile(input) {
+    const file = input.files[0];
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    fetch('/files/upload/', {
+        method: 'POST',
+        headers: { 'X-CSRFToken': csrfToken },
+        body: formData
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success && chatSocket && chatSocket.readyState === WebSocket.OPEN) {
+            chatSocket.send(JSON.stringify({
+                type: 'chat_message',
+                message: '',
+                receiver_id: otherUserId,
+                file_url: data.file.url,
+                file_name: data.file.name
+            }));
+        }
+    });
+    input.value = '';
+}
+
+// New chat search
+document.getElementById('new-chat-search')?.addEventListener('input', function() {
+    const q = this.value.trim();
+    if (q.length < 2) { document.getElementById('new-chat-results').innerHTML = ''; return; }
+    fetch(`/accounts/search-users/?q=${encodeURIComponent(q)}`)
+        .then(r => r.json())
+        .then(d => {
+            document.getElementById('new-chat-results').innerHTML = d.users.map(u => `
+                <a href="/chat/room/${u.id}/" class="conv-item" style="text-decoration:none">
+                    <img src="${u.profile_image}" class="avatar" alt=""><div class="conv-info">
+                    <div class="conv-name">${u.display_name}</div><div class="conv-preview">${u.email}</div></div>
+                </a>
+            `).join('');
+        });
+});
+
+// Close emoji on outside click
+document.addEventListener('click', e => {
+    if (!e.target.closest('.emoji-picker-container')) document.getElementById('emoji-panel').classList.remove('show');
+});
+</script>
+{% endblock %}
