@@ -138,6 +138,38 @@
     </div>
 </div>
 
+<!-- Forward Message Modal -->
+<div class="modal-overlay" id="forward-modal">
+    <div class="modal">
+        <div class="modal-header">
+            <h3>Forward Message</h3>
+            <button class="btn-icon" onclick="this.closest('.modal-overlay').classList.remove('show')">✕</button>
+        </div>
+        <div class="modal-body">
+            <div id="forward-message-preview" style="background: var(--bg-surface); padding: 12px; border-radius: 8px; margin-bottom: 16px; font-size: 13px; color: var(--text-secondary); border-left: 3px solid var(--accent); white-space: pre-wrap;"></div>
+            <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 8px;">Select contacts to forward to:</p>
+            <div class="conversation-list" style="max-height: 300px; overflow-y: auto;" id="forward-user-list">
+                {% for conv in conversations %}
+                <div class="conv-item" onclick="toggleForwardSelect(this, {{ conv.user.id }})" style="cursor:pointer">
+                    <div class="avatar-wrapper">
+                        <img src="{{ conv.user.get_profile_image_url }}" class="avatar" alt="">
+                        <div class="select-overlay"><svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg></div>
+                    </div>
+                    <div class="conv-info">
+                        <div class="conv-name">{{ conv.user.get_display_name }}</div>
+                        <div class="conv-preview">{{ conv.user.email }}</div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="this.closest('.modal-overlay').classList.remove('show')">Cancel</button>
+            <button class="btn btn-primary" style="width:auto" onclick="submitForward()">Send to Selected</button>
+        </div>
+    </div>
+</div>
+
 <script>
 const currentUserId = {{ request.user.id }};
 const otherUserId = {{ other_user.id }};
@@ -190,8 +222,15 @@ function connectWebSocket() {
         } else if (data.type === 'typing') {
             const indicator = document.getElementById('typing-indicator');
             if (data.is_typing) {
-                indicator.textContent = `${data.sender_name} is typing...`;
-                indicator.style.display = 'block';
+                indicator.innerHTML = `
+                    <div class="typing-wave">
+                        <div class="typing-dot"></div>
+                        <div class="typing-dot"></div>
+                        <div class="typing-dot"></div>
+                    </div>
+                    <span>${data.sender_name} is typing</span>
+                `;
+                indicator.style.display = 'flex';
             } else {
                 indicator.style.display = 'none';
             }
@@ -336,16 +375,43 @@ function deleteMessage(id) {
     });
 }
 
+let messageToForward = '';
+let selectedForwardUsers = new Set();
+
 function forwardMessage(id, text) {
-    const recipientId = prompt('Enter User ID to forward to (This would be a picker in a full UI):');
-    if (!recipientId) return;
+    messageToForward = text;
+    selectedForwardUsers.clear();
+    document.querySelectorAll('#forward-user-list .conv-item').forEach(el => el.classList.remove('selected'));
+    const preview = document.getElementById('forward-message-preview');
+    preview.textContent = text;
+    document.getElementById('forward-modal').classList.add('show');
+}
+
+function toggleForwardSelect(el, userId) {
+    if (selectedForwardUsers.has(userId)) {
+        selectedForwardUsers.delete(userId);
+        el.classList.remove('selected');
+    } else {
+        selectedForwardUsers.add(userId);
+        el.classList.add('selected');
+    }
+}
+
+function submitForward() {
+    if (selectedForwardUsers.size === 0) return;
     
-    chatSocket.send(JSON.stringify({
-        type: 'chat_message',
-        message: `[Forwarded]: ${text}`,
-        receiver_id: parseInt(recipientId)
-    }));
-    alert('Message forwarded!');
+    if (chatSocket && chatSocket.readyState === WebSocket.OPEN) {
+        selectedForwardUsers.forEach(userId => {
+            chatSocket.send(JSON.stringify({
+                type: 'chat_message',
+                message: messageToForward,
+                receiver_id: userId
+            }));
+        });
+        document.getElementById('forward-modal').classList.remove('show');
+    } else {
+        alert('Connection lost. Please refresh.');
+    }
 }
 
 // Enter to send, Shift+Enter for new line
